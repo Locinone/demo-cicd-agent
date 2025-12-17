@@ -13,7 +13,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-    environment: COPILOT_GITHUB_TOKEN
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,8 +24,16 @@ jobs:
 
       - name: Install GitHub Copilot CLI
         run: npm i -g @github/copilot
-      - name: Debug token
-        run: echo "${COPILOT_GITHUB_TOKEN:+SET}"  # prints SET if the token exists
+
+      - name: Check Copilot token
+        run: |
+          if [ -z "$COPILOT_GITHUB_TOKEN" ]; then
+            echo "❌ Token is missing"
+            exit 1
+          else
+            echo "✅ Token is present"
+          fi
+
       - name: Run Security Agent via Copilot CLI
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
