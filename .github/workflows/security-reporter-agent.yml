@@ -1,18 +1,23 @@
 name: Security Agent Workflow
-# The GitHub Actions workflow requires you to create a secret named COPILOT_GITHUB_TOKEN. This token is a fine-grained personal access token with the Copilot Requests read-only permission. Add this token as a secret in your GitHub repository settings to enable the workflow to authenticate with Copilot.
+
 on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
-  workflow_dispatch: # Adds the ability to run manually from CLI or
+  workflow_dispatch:
 
 jobs:
   security-assessment:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    # IMPORTANT: required to load the environment secret
+    environment: dev
+
     permissions:
       contents: read
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,37 +28,42 @@ jobs:
           node-version: 22
 
       - name: Install GitHub Copilot CLI
-        run: npm i -g @github/copilot
+        run: npm install -g @github/copilot
 
-      # - name: Check Copilot token
-      #   run: |
-      #     if [ -z "$COPILOT_GITHUB_TOKEN" ]; then
-      #       echo "❌ Token is missing"
-      #       exit 1
-      #     else
-      #       echo "✅ Token is present"
-      #     fi
+      - name: Verify Copilot token
+        run: |
+          if [ -z "$COPILOT_GITHUB_TOKEN" ]; then
+            echo "❌ COPILOT_GITHUB_TOKEN is missing"
+            exit 1
+          else
+            echo "✅ COPILOT_GITHUB_TOKEN detected"
+          fi
 
       - name: Run Security Agent via Copilot CLI
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+
           AGENT_PROMPT=$(cat .github/agents/security-reporter.agent.md)
+
           PROMPT="$AGENT_PROMPT"
           PROMPT+=$'\n\nContext:\n'
           PROMPT+="- Repository: $GITHUB_REPOSITORY"
           PROMPT+=$'\n\nTask:\n'
-          PROMPT+=$"\n- Execute the instructions on the full codebase"
+          PROMPT+=$'\n- Execute the instructions on the full codebase'
           PROMPT+=$'\n- Generate the security report at /security-reports/security-assessment-report.md summarizing findings, severity, and remediation guidance.'
 
-          copilot --prompt "$PROMPT" --allow-all-tools --allow-all-paths < /dev/null
+          copilot --prompt "$PROMPT" \
+                  --allow-all-tools \
+                  --allow-all-paths < /dev/null
 
       - name: Output security report as summary
         if: always()
         run: |
           set -euo pipefail
+
           REPORT_PATH="security-reports/security-assessment-report.md"
 
           if [ ! -f "$REPORT_PATH" ]; then
@@ -61,12 +71,9 @@ jobs:
             exit 0
           fi
 
-          # Add a header to the summary
-          echo "# Security Assessment Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Append the full report content
-          cat "$REPORT_PATH" >> $GITHUB_STEP_SUMMARY
+          echo "# Security Assessment Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat "$REPORT_PATH" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload security report artifact
         if: always()
@@ -80,6 +87,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+
           REPORT_PATH="security-reports/security-assessment-report.md"
 
           if [ ! -f "$REPORT_PATH" ]; then
@@ -88,8 +96,7 @@ jobs:
           fi
 
           if grep -q "THIS ASSESSMENT CONTAINS A CRITICAL VULNERABILITY" "$REPORT_PATH"; then
-            echo "❌ CRITICAL VULNERABILITY DETECTED - Workflow failed"
-            echo "The security assessment found critical vulnerabilities that must be addressed before proceeding."
+            echo "❌ CRITICAL VULNERABILITY DETECTED"
             exit 1
           else
             echo "✅ No critical vulnerabilities detected"
