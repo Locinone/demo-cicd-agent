@@ -24,7 +24,8 @@ jobs:
 
       - name: Install GitHub Copilot CLI
         run: npm i -g @github/copilot
-
+      - name: Debug token
+        run: echo "${COPILOT_GITHUB_TOKEN:+SET}"  # prints SET if the token exists
       - name: Run Security Agent via Copilot CLI
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
