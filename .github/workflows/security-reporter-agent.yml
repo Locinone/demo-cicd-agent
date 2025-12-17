@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    environment: COPILOT_GITHUB_TOKEN
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
